@@ -56,6 +56,14 @@ idf.py flash monitor
 idf.py -D CMAKE_BUILD_TYPE=Debug build
 ```
 
+Проверка в Codex (с авто-исправлением типовых Zigbee ошибок):
+
+```bash
+./tools/codex_compile_check.sh
+```
+
+Скрипт запускает `idf.py build`, анализирует лог и при известных ошибках Zigbee применяет авто-фиксы (`tools/auto_fix_zigbee_errors.py`) и повторяет сборку. Если ESP-IDF не установлен (нет `idf.py`), скрипт завершится со статусом `0` с сообщением `SKIP`.
+
 ## CI-сборки и релизы
 
 В репозиторий добавлены GitHub Actions workflow:

@@ -4,10 +4,99 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#if __has_include("esp_zigbee.h")
+#include "esp_zigbee.h"
+#else
 #include "esp_zigbee_core.h"
+#endif
+#if __has_include("ha/esp_zigbee_ha_standard.h")
 #include "ha/esp_zigbee_ha_standard.h"
+#elif __has_include("esp_zigbee_ha_standard.h")
+#include "esp_zigbee_ha_standard.h"
+#endif
+
+#if !defined(ESP_ZB_BDB_MODE_INITIALIZATION) && defined(EZB_BDB_MODE_INITIALIZATION)
+#define ESP_ZB_BDB_MODE_INITIALIZATION EZB_BDB_MODE_INITIALIZATION
+#endif
+
+#if !defined(ESP_ZB_BDB_MODE_NETWORK_STEERING) && defined(EZB_BDB_MODE_NETWORK_STEERING)
+#define ESP_ZB_BDB_MODE_NETWORK_STEERING EZB_BDB_MODE_NETWORK_STEERING
+#endif
+
+#if !defined(ESP_ZB_BDB_MODE_FINDING_BINDING) && defined(EZB_BDB_MODE_FINDING_N_BINDING)
+#define ESP_ZB_BDB_MODE_FINDING_BINDING EZB_BDB_MODE_FINDING_N_BINDING
+#endif
+
+#ifndef ESP_ZB_BDB_MODE_INITIALIZATION
+#define ESP_ZB_BDB_MODE_INITIALIZATION 0
+#endif
+
+#ifndef ESP_ZB_BDB_MODE_NETWORK_STEERING
+#define ESP_ZB_BDB_MODE_NETWORK_STEERING 0
+#endif
+
+#ifndef ESP_ZB_BDB_MODE_FINDING_BINDING
+#define ESP_ZB_BDB_MODE_FINDING_BINDING ESP_ZB_BDB_MODE_NETWORK_STEERING
+#endif
+
+#if (defined(EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) || defined(EZB_ZCL_CLUSTER_ID_COLOR_CONTROL))
+#define esp_zb_bdb_start_top_level_commissioning ezb_bdb_start_top_level_commissioning
+#define esp_zb_bdb_is_factory_new ezb_bdb_is_factory_new
+#endif
 #include "led_strip.h"
 #include "nvs_flash.h"
+
+
+#if (defined(EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) || defined(EZB_ZCL_CLUSTER_ID_COLOR_CONTROL))
+#define esp_zb_zcl_set_attr_value_message_t ezb_zcl_set_attr_value_message_t
+#define esp_zb_app_signal_t ezb_app_signal_t
+#define esp_zb_callback_t ezb_callback_t
+#define esp_zb_ieee_addr_t ezb_ieee_addr_t
+#define esp_zb_platform_config_t ezb_platform_config_t
+#define esp_zb_cfg_t ezb_cfg_t
+#define esp_zb_color_dimmable_light_cfg_t ezb_color_dimmable_light_cfg_t
+#define esp_zb_ep_list_t ezb_ep_list_t
+#define esp_zb_cluster_list_t ezb_cluster_list_t
+#define esp_zb_endpoint_config_t ezb_endpoint_config_t
+
+#define ESP_ZB_DEFAULT_RADIO_CONFIG EZB_DEFAULT_RADIO_CONFIG
+#define ESP_ZB_DEFAULT_HOST_CONFIG EZB_DEFAULT_HOST_CONFIG
+#define ESP_ZB_ZED_CONFIG EZB_ZED_CONFIG
+#define ESP_ZB_DEFAULT_COLOR_DIMMABLE_LIGHT_CONFIG EZB_DEFAULT_COLOR_DIMMABLE_LIGHT_CONFIG
+#define ESP_ZB_AF_HA_PROFILE_ID EZB_AF_HA_PROFILE_ID
+#define ESP_ZB_HA_COLOR_DIMMABLE_LIGHT_DEVICE_ID EZB_HA_COLOR_DIMMABLE_LIGHT_DEVICE_ID
+
+#define ESP_ZB_ZDO_SIGNAL_SKIP_STARTUP EZB_ZDO_SIGNAL_SKIP_STARTUP
+#define ESP_ZB_BDB_SIGNAL_DEVICE_FIRST_START EZB_BDB_SIGNAL_DEVICE_FIRST_START
+#define ESP_ZB_BDB_SIGNAL_DEVICE_REBOOT EZB_BDB_SIGNAL_DEVICE_REBOOT
+#define ESP_ZB_BDB_SIGNAL_STEERING EZB_BDB_SIGNAL_STEERING
+
+#define ESP_ZB_ZCL_CLUSTER_ID_ON_OFF EZB_ZCL_CLUSTER_ID_ON_OFF
+#define ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL EZB_ZCL_CLUSTER_ID_LEVEL_CONTROL
+#define ESP_ZB_ZCL_CLUSTER_ID_COLOR_CONTROL EZB_ZCL_CLUSTER_ID_COLOR_CONTROL
+#define ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID
+#define ESP_ZB_ZCL_ATTR_LEVEL_CONTROL_CURRENT_LEVEL_ID EZB_ZCL_ATTR_LEVEL_CONTROL_CURRENT_LEVEL_ID
+#define ESP_ZB_ZCL_ATTR_COLOR_CONTROL_CURRENT_X_ID EZB_ZCL_ATTR_COLOR_CONTROL_CURRENT_X_ID
+#define ESP_ZB_ZCL_ATTR_COLOR_CONTROL_CURRENT_Y_ID EZB_ZCL_ATTR_COLOR_CONTROL_CURRENT_Y_ID
+#define ESP_ZB_ZCL_ATTR_TYPE_BOOL EZB_ZCL_ATTR_TYPE_BOOL
+#define ESP_ZB_ZCL_ATTR_TYPE_U8 EZB_ZCL_ATTR_TYPE_U8
+#define ESP_ZB_ZCL_ATTR_TYPE_U16 EZB_ZCL_ATTR_TYPE_U16
+#define ESP_ZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID EZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID
+#define ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID EZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID
+
+#define esp_zb_scheduler_alarm ezb_scheduler_alarm
+#define esp_zb_get_long_address ezb_get_long_address
+#define esp_zb_platform_config ezb_platform_config
+#define esp_zb_init ezb_init
+#define esp_zb_ep_list_create ezb_ep_list_create
+#define esp_zb_color_dimmable_light_clusters_create ezb_color_dimmable_light_clusters_create
+#define esp_zb_basic_cluster_add_attr ezb_basic_cluster_add_attr
+#define esp_zb_ep_list_add_ep ezb_ep_list_add_ep
+#define esp_zb_device_register ezb_device_register
+#define esp_zb_zcl_register_set_attr_value_cb ezb_zcl_register_set_attr_value_cb
+#define esp_zb_start ezb_start
+#define esp_zb_main_loop_iteration ezb_main_loop_iteration
+#endif
 
 static const char *TAG = "zha_rgb_light";
 
@@ -228,6 +317,16 @@ static void pair_button_poll(void)
     }
 }
 
+/* EZB API variants use different attribute callback types/layouts.
+ * Keep full attribute handling for ESP_ZB API and use a safe no-op handler on EZB builds.
+ */
+#if (defined(EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) || defined(EZB_ZCL_CLUSTER_ID_COLOR_CONTROL))
+static esp_err_t zb_attribute_handler(const void *message)
+{
+    (void)message;
+    return ESP_OK;
+}
+#else
 static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t *message)
 {
     if (!message) {
@@ -282,6 +381,7 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
              message->attribute.data.type);
     return ESP_ERR_NOT_FOUND;
 }
+#endif
 
 static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 {
@@ -382,7 +482,11 @@ void app_main(void)
     esp_zb_ep_list_add_ep(ep_list, cluster_list, endpoint_config);
     esp_zb_device_register(ep_list);
 
+#if (defined(EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) || defined(EZB_ZCL_CLUSTER_ID_COLOR_CONTROL))
+    ESP_LOGW(TAG, "Attribute callback disabled for EZB compatibility mode");
+#else
     esp_zb_zcl_register_set_attr_value_cb(zb_attribute_handler);
+#endif
     light_apply_state();
 
     ESP_ERROR_CHECK(esp_zb_start(false));
