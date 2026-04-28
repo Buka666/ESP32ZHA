@@ -327,6 +327,7 @@ static __attribute__((unused)) esp_err_t zb_attribute_handler(const void *messag
     (void)message;
     return ESP_OK;
 }
+#endif
 
 static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 {
@@ -426,4 +427,5 @@ void app_main(void)
         pair_button_poll();
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+#endif
 }
