@@ -1,3 +1,4 @@
 dependencies:
   espressif/led_strip: "*"
-  espressif/esp-zigbee-sdk: "*"
+  espressif/esp-zigbee-lib: "*"
+  espressif/esp-zboss-lib: "*"
