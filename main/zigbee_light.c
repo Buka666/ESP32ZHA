@@ -93,6 +93,10 @@ static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
     }
 
     uint32_t *p_sg_p = signal_struct->p_app_signal;
+    if (!p_sg_p) {
+        ESP_LOGE(TAG, "Invalid app signal pointer");
+        return;
+    }
     uint32_t sig_type = *p_sg_p;
     esp_err_t status = signal_struct->esp_err_status;
 
