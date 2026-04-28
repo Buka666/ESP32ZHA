@@ -42,11 +42,27 @@
 
 ## Сборка
 
+Локально:
+
 ```bash
 idf.py set-target esp32c6
-idf.py build
+idf.py -D CMAKE_BUILD_TYPE=Release build
 idf.py flash monitor
 ```
+
+Для отладочной сборки:
+
+```bash
+idf.py -D CMAKE_BUILD_TYPE=Debug build
+```
+
+## CI-сборки
+
+В репозиторий добавлен GitHub Actions workflow `.github/workflows/build.yml`:
+
+- запускается на `push`, `pull_request` и вручную (`workflow_dispatch`);
+- собирает `Release` и `Debug` для `esp32c6`;
+- публикует артефакты прошивки (`.bin`, `.elf`, `.map`).
 
 ## Подключение к ZHA
 
