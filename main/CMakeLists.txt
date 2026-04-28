@@ -5,7 +5,7 @@ endif()
 
 idf_component_register(SRCS "zigbee_light.c"
                     INCLUDE_DIRS "."
-                    REQUIRES led_strip ${GPIO_COMPONENT} esp_timer log nvs_flash)
+                    REQUIRES led_strip ${GPIO_COMPONENT} esp_timer log nvs_flash espressif__esp-zigbee-lib espressif__esp-zboss-lib)
 
 execute_process(
     COMMAND git -c safe.directory=${CMAKE_SOURCE_DIR} -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD
