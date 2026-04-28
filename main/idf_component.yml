@@ -1,0 +1,3 @@
+dependencies:
+  espressif/led_strip: "*"
+  espressif/esp-zigbee-sdk: "*"
