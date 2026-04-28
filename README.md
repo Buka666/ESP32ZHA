@@ -1,26 +1,39 @@
-# ESP32-C6 Zigbee лампа с совместимостью ZHA
+# ESP32-C6 SuperMini Zigbee RGB лампа для ZHA
 
-Минимальный шаблон Zigbee устройства типа **On/Off Light** для ESP32-C6 на базе `esp-zigbee-sdk` (в составе ESP-IDF компонентов), который корректно определяется в **Home Assistant ZHA** как лампа.
+Минимальный шаблон Zigbee устройства типа **Color Dimmable Light** для **ESP32-C6 SuperMini** на базе `esp-zigbee-sdk`, который определяется в **Home Assistant ZHA** как RGB-лампа с регулировкой яркости.
 
 ## Что реализовано
 
-- Zigbee End Device (можно переключить на Router через `sdkconfig`).
-- Профиль Home Automation (HA), устройство On/Off Light.
+- Zigbee End Device (ZED).
+- Профиль Home Automation (HA), устройство `Color Dimmable Light`.
 - Endpoint `10`.
-- Кластер `Basic` с `ManufacturerName` и `ModelIdentifier` (важно для ZHA).
-- Кластер `Identify`.
-- Кластер `On/Off` с обработкой команд от координатора (ZHA).
+- Кластеры:
+  - `Basic` (с `ManufacturerName`/`ModelIdentifier`),
+  - `Identify`,
+  - `On/Off`,
+  - `Level Control`,
+  - `Color Control` (XY).
+- Обработка атрибутов от ZHA: включение, яркость, цвет (XY).
+- Управление **встроенным RGB LED (WS2812)** на ESP32-C6 SuperMini через `led_strip`.
+
+## Встроенный RGB LED ESP32-C6 SuperMini
+
+В примере используется встроенный адресный светодиод:
+
+- `DATA` → `GPIO8`
+- Тип светодиода: `WS2812`
+- Количество: `1`
+
+Если у вашей ревизии платы другой пин встроенного светодиода, поменяйте `RGB_LED_GPIO` в `main/zigbee_light.c`.
 
 ## Структура
 
-- `main/zigbee_light.c` — основная логика Zigbee устройства.
+- `main/zigbee_light.c` — логика Zigbee RGB лампы.
 - `main/CMakeLists.txt` — регистрация компонента.
 - `CMakeLists.txt` — корневой CMake проекта.
 - `sdkconfig.defaults` — базовые дефолты для Zigbee на ESP32-C6.
 
 ## Сборка
-
-> Требуется ESP-IDF с компонентом Zigbee (`esp-zigbee-sdk`) и целевой чип `esp32c6`.
 
 ```bash
 idf.py set-target esp32c6
@@ -30,13 +43,6 @@ idf.py flash monitor
 
 ## Подключение к ZHA
 
-1. Переведите устройство в режим Commissioning (в этом примере запускается автоматически после старта).
-2. В Home Assistant откройте: **Settings → Devices & Services → Zigbee Home Automation → Add Device**.
-3. После интервью устройство появится как лампа (On/Off).
-
-## Важные заметки для совместимости ZHA
-
-- Указывайте осмысленные `ManufacturerName` и `ModelIdentifier`.
-- Используйте стандартные HA кластеры без vendor-specific расширений в минимальном MVP.
-- Для стабильного повторного подключения храните NVRAM (по умолчанию включено в IDF).
-
+1. В Home Assistant: **Settings → Devices & Services → Zigbee Home Automation → Add Device**.
+2. После интервью устройство появится как RGB лампа.
+3. Проверка: On/Off, Brightness и Color должны управляться из интерфейса ZHA и отображаться на встроенном RGB LED.

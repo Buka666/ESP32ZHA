@@ -1,46 +1,152 @@
+#include <math.h>
 #include <string.h>
 
 #include "esp_log.h"
-#include "nvs_flash.h"
-#include "driver/gpio.h"
-
 #include "esp_zigbee_core.h"
 #include "ha/esp_zigbee_ha_standard.h"
+#include "led_strip.h"
+#include "nvs_flash.h"
 
-static const char *TAG = "zha_light";
+static const char *TAG = "zha_rgb_light";
 
 #define HA_ESP_LIGHT_ENDPOINT 10
 #define INSTALL_CODE_POLICY_ENABLE false
 
-/* GPIO конфигурация для управления реле/светодиодом */
-#define LIGHT_GPIO_PIN GPIO_NUM_8
+/* ESP32-C6 SuperMini встроенный WS2812 RGB LED */
+#define RGB_LED_GPIO GPIO_NUM_8
+#define RGB_LED_NUM_PIXELS 1
+#define RGB_LED_RMT_RES_HZ (10 * 1000 * 1000)
 
-static bool s_light_on = false;
+typedef struct {
+    bool on;
+    uint8_t level;      /* Zigbee level 0..254 */
+    uint16_t x;         /* Zigbee color X (0..65535) */
+    uint16_t y;         /* Zigbee color Y (0..65535) */
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} rgb_light_state_t;
 
-/**
- * @brief Инициализация GPIO для управления светом
- */
-static void light_gpio_init(void)
+static rgb_light_state_t s_light = {
+    .on = false,
+    .level = 254,
+    .x = 30140, /* ~= 0.46 */
+    .y = 32768, /* ~= 0.50 */
+    .r = 255,
+    .g = 180,
+    .b = 120,
+};
+
+static led_strip_handle_t s_led_strip = NULL;
+
+static esp_err_t rgb_led_init(void)
 {
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << LIGHT_GPIO_PIN),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
+    led_strip_config_t strip_config = {
+        .strip_gpio_num = RGB_LED_GPIO,
+        .max_leds = RGB_LED_NUM_PIXELS,
+        .led_model = LED_MODEL_WS2812,
+        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
+        .flags = {
+            .invert_out = false,
+        },
     };
-    gpio_config(&io_conf);
-    gpio_set_level(LIGHT_GPIO_PIN, 0);
+
+    led_strip_rmt_config_t rmt_config = {
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .resolution_hz = RGB_LED_RMT_RES_HZ,
+        .mem_block_symbols = 64,
+        .flags = {
+            .with_dma = false,
+        },
+    };
+
+    esp_err_t err = led_strip_new_rmt_device(&strip_config, &rmt_config, &s_led_strip);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    led_strip_clear(s_led_strip);
+    return ESP_OK;
 }
 
-/**
- * @brief Установка состояния светильника
- */
-static void light_set_state(bool on)
+static uint8_t clamp_u8(float v)
 {
-    s_light_on = on;
-    gpio_set_level(LIGHT_GPIO_PIN, on ? 1 : 0);
-    ESP_LOGI(TAG, "Light GPIO state set to: %s", on ? "ON" : "OFF");
+    if (v < 0.0f) {
+        return 0;
+    }
+    if (v > 255.0f) {
+        return 255;
+    }
+    return (uint8_t)lrintf(v);
+}
+
+/* Приближенное преобразование CIE xy + яркость -> RGB */
+static void xy_level_to_rgb(uint16_t x_u16, uint16_t y_u16, uint8_t level, uint8_t *r, uint8_t *g, uint8_t *b)
+{
+    float x = (float)x_u16 / 65535.0f;
+    float y = (float)y_u16 / 65535.0f;
+
+    if (y < 0.0001f) {
+        y = 0.0001f;
+    }
+
+    float Y = (float)level / 254.0f;
+    float X = (Y / y) * x;
+    float Z = (Y / y) * (1.0f - x - y);
+
+    float r_lin = X * 1.612f - Y * 0.203f - Z * 0.302f;
+    float g_lin = -X * 0.509f + Y * 1.412f + Z * 0.066f;
+    float b_lin = X * 0.026f - Y * 0.072f + Z * 0.962f;
+
+    if (r_lin < 0.0f) r_lin = 0.0f;
+    if (g_lin < 0.0f) g_lin = 0.0f;
+    if (b_lin < 0.0f) b_lin = 0.0f;
+
+    float max_lin = fmaxf(r_lin, fmaxf(g_lin, b_lin));
+    if (max_lin > 1.0f) {
+        r_lin /= max_lin;
+        g_lin /= max_lin;
+        b_lin /= max_lin;
+    }
+
+    /* gamma correction */
+    float r_gamma = powf(r_lin, 1.0f / 2.2f);
+    float g_gamma = powf(g_lin, 1.0f / 2.2f);
+    float b_gamma = powf(b_lin, 1.0f / 2.2f);
+
+    *r = clamp_u8(r_gamma * 255.0f);
+    *g = clamp_u8(g_gamma * 255.0f);
+    *b = clamp_u8(b_gamma * 255.0f);
+}
+
+static void light_apply_state(void)
+{
+    uint8_t r = 0;
+    uint8_t g = 0;
+    uint8_t b = 0;
+
+    if (s_light.on && s_light.level > 0) {
+        xy_level_to_rgb(s_light.x, s_light.y, s_light.level, &r, &g, &b);
+    }
+
+    s_light.r = r;
+    s_light.g = g;
+    s_light.b = b;
+
+    if (s_led_strip) {
+        led_strip_set_pixel(s_led_strip, 0, s_light.r, s_light.g, s_light.b);
+        led_strip_refresh(s_led_strip);
+    }
+
+    ESP_LOGI(TAG,
+             "Applied RGB state: on=%d level=%u xy=(%u,%u) rgb=(%u,%u,%u)",
+             s_light.on,
+             s_light.level,
+             s_light.x,
+             s_light.y,
+             s_light.r,
+             s_light.g,
+             s_light.b);
 }
 
 static void bdb_start_top_level_commissioning_cb(uint8_t mode_mask)
@@ -48,56 +154,69 @@ static void bdb_start_top_level_commissioning_cb(uint8_t mode_mask)
     esp_zb_bdb_start_top_level_commissioning(mode_mask);
 }
 
-/**
- * @brief Обработчик для изменения атрибутов ZigBee
- * 
- * Обрабатывает команды включения/выключения света от ZigBee координатора
- */
 static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t *message)
 {
-    /* Проверка на NULL указатель */
     if (!message) {
         ESP_LOGW(TAG, "Invalid message pointer in attribute handler");
         return ESP_ERR_INVALID_ARG;
     }
 
-    /* Проверка статуса сообщения */
     if (message->info.status != ESP_OK) {
         ESP_LOGW(TAG, "Invalid message status: %d", message->info.status);
         return ESP_ERR_INVALID_ARG;
     }
 
-    /* Проверка, что это команда для нашего эндпоинта и кластера ON/OFF */
-    if (message->info.dst_endpoint == HA_ESP_LIGHT_ENDPOINT &&
-        message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF &&
+    if (message->info.dst_endpoint != HA_ESP_LIGHT_ENDPOINT) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF &&
         message->attribute.id == ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID &&
         message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_BOOL) {
-
-        bool new_state = *(bool *)message->attribute.data.value;
-        light_set_state(new_state);
-        ESP_LOGI(TAG, "Light state updated from ZHA: %s", new_state ? "ON" : "OFF");
+        s_light.on = *(bool *)message->attribute.data.value;
+        light_apply_state();
         return ESP_OK;
     }
 
-    /* Логирование неизвестных атрибутов */
-    ESP_LOGD(TAG, "Unknown attribute: endpoint=%d, cluster=0x%04x, attr=0x%04x",
-             message->info.dst_endpoint, message->info.cluster, message->attribute.id);
+    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL &&
+        message->attribute.id == ESP_ZB_ZCL_ATTR_LEVEL_CONTROL_CURRENT_LEVEL_ID &&
+        message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_U8) {
+        s_light.level = *(uint8_t *)message->attribute.data.value;
+        light_apply_state();
+        return ESP_OK;
+    }
+
+    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_COLOR_CONTROL &&
+        message->attribute.id == ESP_ZB_ZCL_ATTR_COLOR_CONTROL_CURRENT_X_ID &&
+        message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_U16) {
+        s_light.x = *(uint16_t *)message->attribute.data.value;
+        light_apply_state();
+        return ESP_OK;
+    }
+
+    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_COLOR_CONTROL &&
+        message->attribute.id == ESP_ZB_ZCL_ATTR_COLOR_CONTROL_CURRENT_Y_ID &&
+        message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_U16) {
+        s_light.y = *(uint16_t *)message->attribute.data.value;
+        light_apply_state();
+        return ESP_OK;
+    }
+
+    ESP_LOGD(TAG, "Unhandled attr update: cluster=0x%04x attr=0x%04x type=0x%02x",
+             message->info.cluster,
+             message->attribute.id,
+             message->attribute.data.type);
     return ESP_ERR_NOT_FOUND;
 }
 
 static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 {
-    if (!signal_struct) {
-        ESP_LOGE(TAG, "Invalid signal struct pointer");
+    if (!signal_struct || !signal_struct->p_app_signal) {
+        ESP_LOGE(TAG, "Invalid Zigbee signal pointer");
         return;
     }
 
-    uint32_t *p_sg_p = signal_struct->p_app_signal;
-    if (!p_sg_p) {
-        ESP_LOGE(TAG, "Invalid app signal pointer");
-        return;
-    }
-    uint32_t sig_type = *p_sg_p;
+    uint32_t sig_type = *(uint32_t *)signal_struct->p_app_signal;
     esp_err_t status = signal_struct->esp_err_status;
 
     switch (sig_type) {
@@ -111,7 +230,6 @@ static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
     case ESP_ZB_BDB_SIGNAL_DEVICE_FIRST_START:
     case ESP_ZB_BDB_SIGNAL_DEVICE_REBOOT:
         if (status == ESP_OK) {
-            ESP_LOGI(TAG, "Device started successfully, status: 0x%x", status);
             if (esp_zb_bdb_is_factory_new()) {
                 ESP_LOGI(TAG, "Factory-new device, starting network steering");
                 esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
@@ -119,7 +237,7 @@ static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
                 ESP_LOGI(TAG, "Device rebooted and joined network");
             }
         } else {
-            ESP_LOGW(TAG, "Failed to initialize Zigbee stack (status: %s)", esp_err_to_name(status));
+            ESP_LOGW(TAG, "Failed to initialize Zigbee stack: %s", esp_err_to_name(status));
         }
         break;
 
@@ -132,7 +250,7 @@ static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
                      ieee_addr[7], ieee_addr[6], ieee_addr[5], ieee_addr[4],
                      ieee_addr[3], ieee_addr[2], ieee_addr[1], ieee_addr[0]);
         } else {
-            ESP_LOGW(TAG, "Network steering was not successful, retrying");
+            ESP_LOGW(TAG, "Network steering failed, retrying");
             esp_zb_scheduler_alarm((esp_zb_callback_t)bdb_start_top_level_commissioning_cb,
                                    ESP_ZB_BDB_MODE_NETWORK_STEERING,
                                    1000);
@@ -154,8 +272,7 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    /* Инициализация GPIO для управления светом */
-    light_gpio_init();
+    ESP_ERROR_CHECK(rgb_led_init());
 
     esp_zb_platform_config_t config = {
         .radio_config = ESP_ZB_DEFAULT_RADIO_CONFIG(),
@@ -165,24 +282,23 @@ void app_main(void)
 
     esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZED_CONFIG();
     zb_nwk_cfg.install_code_policy = INSTALL_CODE_POLICY_ENABLE;
-
     esp_zb_init(&zb_nwk_cfg);
 
-    esp_zb_on_off_light_cfg_t light_cfg = ESP_ZB_DEFAULT_ON_OFF_LIGHT_CONFIG();
+    esp_zb_color_dimmable_light_cfg_t light_cfg = ESP_ZB_DEFAULT_COLOR_DIMMABLE_LIGHT_CONFIG();
     esp_zb_ep_list_t *ep_list = esp_zb_ep_list_create();
-    esp_zb_cluster_list_t *cluster_list = esp_zb_on_off_light_clusters_create(&light_cfg);
+    esp_zb_cluster_list_t *cluster_list = esp_zb_color_dimmable_light_clusters_create(&light_cfg);
 
     esp_zb_basic_cluster_add_attr(cluster_list,
                                   ESP_ZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID,
                                   (void *)"ESPRESSIF");
     esp_zb_basic_cluster_add_attr(cluster_list,
                                   ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID,
-                                  (void *)"ESP32C6_ZHA_LIGHT");
+                                  (void *)"ESP32C6_SUPERMINI_RGB");
 
     esp_zb_endpoint_config_t endpoint_config = {
         .endpoint = HA_ESP_LIGHT_ENDPOINT,
         .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
-        .app_device_id = ESP_ZB_HA_ON_OFF_LIGHT_DEVICE_ID,
+        .app_device_id = ESP_ZB_HA_COLOR_DIMMABLE_LIGHT_DEVICE_ID,
         .app_device_version = 0,
     };
 
@@ -190,6 +306,7 @@ void app_main(void)
     esp_zb_device_register(ep_list);
 
     esp_zb_zcl_register_set_attr_value_cb(zb_attribute_handler);
+    light_apply_state();
 
     ESP_ERROR_CHECK(esp_zb_start(false));
     while (1) {
