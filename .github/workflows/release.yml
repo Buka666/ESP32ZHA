@@ -1,0 +1,59 @@
+name: Release firmware
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name for release (e.g. v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:release-v5.2
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+
+      - name: Build (Release)
+        shell: bash
+        run: |
+          set -euo pipefail
+          . /opt/esp/idf/export.sh
+          idf.py set-target esp32c6
+          idf.py -D CMAKE_BUILD_TYPE=Release build
+
+      - name: Collect release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp build/*.bin dist/
+          cp build/*.elf dist/
+          cp build/*.map dist/
+          cp build/flasher_args.json dist/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          files: |
+            dist/*.bin
+            dist/*.elf
+            dist/*.map
+            dist/flasher_args.json
