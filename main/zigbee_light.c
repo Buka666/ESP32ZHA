@@ -11,6 +11,10 @@
 
 static const char *TAG = "zha_rgb_light";
 
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "dev"
+#endif
+
 #define HA_ESP_LIGHT_ENDPOINT 10
 #define INSTALL_CODE_POLICY_ENABLE false
 
@@ -335,6 +339,8 @@ static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 
 void app_main(void)
 {
+    ESP_LOGI(TAG, "Firmware version: %s", FIRMWARE_VERSION);
+
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
