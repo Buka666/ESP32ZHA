@@ -38,7 +38,7 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
     return ESP_OK;
 }
 
-static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
+void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 {
     uint32_t *p_sg_p = signal_struct->p_app_signal;
     uint32_t sig_type = *p_sg_p;
