@@ -325,6 +325,7 @@ static esp_err_t zb_attribute_handler(const void *message)
     (void)message;
     return ESP_OK;
 }
+#endif
 
 static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 {
