@@ -4,8 +4,33 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#if __has_include("esp_zigbee.h")
+#include "esp_zigbee.h"
+#else
 #include "esp_zigbee_core.h"
+#endif
+#if __has_include("ha/esp_zigbee_ha_standard.h")
 #include "ha/esp_zigbee_ha_standard.h"
+#elif __has_include("esp_zigbee_ha_standard.h")
+#include "esp_zigbee_ha_standard.h"
+#endif
+
+#if !defined(ESP_ZB_BDB_MODE_INITIALIZATION) && defined(EZB_BDB_MODE_INITIALIZATION)
+#define ESP_ZB_BDB_MODE_INITIALIZATION EZB_BDB_MODE_INITIALIZATION
+#endif
+
+#if !defined(ESP_ZB_BDB_MODE_NETWORK_STEERING) && defined(EZB_BDB_MODE_NETWORK_STEERING)
+#define ESP_ZB_BDB_MODE_NETWORK_STEERING EZB_BDB_MODE_NETWORK_STEERING
+#endif
+
+#if !defined(ESP_ZB_BDB_MODE_FINDING_BINDING) && defined(EZB_BDB_MODE_FINDING_N_BINDING)
+#define ESP_ZB_BDB_MODE_FINDING_BINDING EZB_BDB_MODE_FINDING_N_BINDING
+#endif
+
+#if defined(EZB_BDB_MODE_INITIALIZATION)
+#define esp_zb_bdb_start_top_level_commissioning ezb_bdb_start_top_level_commissioning
+#define esp_zb_bdb_is_factory_new ezb_bdb_is_factory_new
+#endif
 #include "led_strip.h"
 #include "nvs_flash.h"
 
