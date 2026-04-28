@@ -1,16 +1,21 @@
+set(GPIO_COMPONENT "driver")
+if(EXISTS "$ENV{IDF_PATH}/components/esp_driver_gpio/CMakeLists.txt")
+    set(GPIO_COMPONENT "esp_driver_gpio")
+endif()
+
 idf_component_register(SRCS "zigbee_light.c"
                     INCLUDE_DIRS "."
-                    REQUIRES led_strip esp_driver_gpio)
+                    REQUIRES led_strip ${GPIO_COMPONENT} esp_timer log nvs_flash esp-zigbee-lib esp-zboss-lib)
 
 execute_process(
-    COMMAND git -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD
+    COMMAND git -c safe.directory=${CMAKE_SOURCE_DIR} -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD
     OUTPUT_VARIABLE GIT_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET
 )
 
 execute_process(
-    COMMAND git -C ${CMAKE_SOURCE_DIR} diff --quiet --exit-code
+    COMMAND git -c safe.directory=${CMAKE_SOURCE_DIR} -C ${CMAKE_SOURCE_DIR} diff --quiet --exit-code
     RESULT_VARIABLE GIT_DIRTY
     ERROR_QUIET
 )
