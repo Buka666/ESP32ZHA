@@ -3,19 +3,16 @@ name: Build firmware
 on:
   push:
     branches:
-      - main
-      - master
+      - "**"
   pull_request:
   workflow_dispatch:
 
 jobs:
   build:
-    name: ${{ matrix.build_type }} / ${{ matrix.target }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        target: [esp32c6]
         build_type: [Release, Debug]
 
     container:
@@ -25,19 +22,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: ESP-IDF build
+      - name: Build (${{ matrix.build_type }})
         shell: bash
         run: |
           set -euo pipefail
           . /opt/esp/idf/export.sh
-          idf.py set-target ${{ matrix.target }}
+          idf.py set-target esp32c6
           idf.py -D CMAKE_BUILD_TYPE=${{ matrix.build_type }} build
 
-      - name: Upload artifacts
+      - name: Pack artifacts (${{ matrix.build_type }})
+        shell: bash
+        run: |
+          set -euo pipefail
+          out_dir="artifacts/${{ matrix.build_type }}"
+          mkdir -p "${out_dir}"
+          cp build/*.bin "${out_dir}/"
+          cp build/*.elf "${out_dir}/"
+          cp build/*.map "${out_dir}/"
+
+      - name: Upload artifacts (${{ matrix.build_type }})
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.target }}-${{ matrix.build_type }}
-          path: |
-            build/*.bin
-            build/*.elf
-            build/*.map
+          name: firmware-esp32c6-${{ matrix.build_type }}
+          path: artifacts/${{ matrix.build_type }}
+          if-no-files-found: error

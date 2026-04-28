@@ -56,13 +56,18 @@ idf.py flash monitor
 idf.py -D CMAKE_BUILD_TYPE=Debug build
 ```
 
-## CI-сборки
+## CI-сборки и релизы
 
-В репозиторий добавлен GitHub Actions workflow `.github/workflows/build.yml`:
+В репозиторий добавлены GitHub Actions workflow:
 
-- запускается на `push`, `pull_request` и вручную (`workflow_dispatch`);
-- собирает `Release` и `Debug` для `esp32c6`;
-- публикует артефакты прошивки (`.bin`, `.elf`, `.map`).
+- `.github/workflows/build.yml`:
+  - запускается на `push`, `pull_request` и вручную (`workflow_dispatch`);
+  - собирает `Release` и `Debug` для `esp32c6`;
+  - публикует артефакты прошивки (`.bin`, `.elf`, `.map`).
+- `.github/workflows/release.yml`:
+  - запускается при пуше тега формата `v*` (например, `v1.0.0`) или вручную;
+  - собирает релизную прошивку;
+  - публикует GitHub Release c файлами прошивки (`.bin`, `.elf`, `.map`, `flasher_args.json`).
 
 ## Подключение к ZHA
 
