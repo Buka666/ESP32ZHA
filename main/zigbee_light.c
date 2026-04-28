@@ -4,8 +4,18 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#if __has_include("esp_zigbee.h")
+#include "esp_zigbee.h"
+#else
 #include "esp_zigbee_core.h"
+#endif
+#if __has_include("ha/esp_zigbee_ha_standard.h")
 #include "ha/esp_zigbee_ha_standard.h"
+#elif __has_include("esp_zigbee_ha_standard.h")
+#include "esp_zigbee_ha_standard.h"
+#else
+#error "Zigbee HA header not found"
+#endif
 #include "led_strip.h"
 #include "nvs_flash.h"
 
