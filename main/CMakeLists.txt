@@ -1,3 +1,8 @@
+set(GPIO_COMPONENT "driver")
+if(EXISTS "$ENV{IDF_PATH}/components/esp_driver_gpio/CMakeLists.txt")
+    set(GPIO_COMPONENT "esp_driver_gpio")
+endif()
+
 idf_component_register(SRCS "zigbee_light.c"
                     INCLUDE_DIRS "."
                     REQUIRES led_strip driver esp_timer log nvs_flash esp-zigbee-lib esp-zboss-lib)
