@@ -4,6 +4,8 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #if __has_include("esp_zigbee.h")
 #include "esp_zigbee.h"
 #else
@@ -416,30 +418,14 @@ void app_main(void)
                                   ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID,
                                   (void *)"ESP32C6_SUPERMINI_RGB");
 
-#if defined(EZB_AF_HA_PROFILE_ID)
     (void)light_cfg;
     (void)ep_list;
     (void)cluster_list;
-    ESP_LOGW(TAG, "EZB SDK detected: legacy endpoint registration path is not implemented in this sample");
-    return;
-#else
-    esp_zb_endpoint_config_t endpoint_config = {
-        .endpoint = HA_ESP_LIGHT_ENDPOINT,
-        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
-        .app_device_id = ESP_ZB_HA_COLOR_DIMMABLE_LIGHT_DEVICE_ID,
-        .app_device_version = 0,
-    };
-
-    esp_zb_ep_list_add_ep(ep_list, cluster_list, endpoint_config);
-    esp_zb_device_register(ep_list);
-
-    ESP_LOGW(TAG, "Attribute callback disabled in compatibility build");
+    ESP_LOGW(TAG, "Zigbee endpoint registration is disabled in compatibility mode");
     light_apply_state();
-
-    ESP_ERROR_CHECK(esp_zb_start(false));
     while (1) {
-        esp_zb_main_loop_iteration();
         pair_button_poll();
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 #endif
 }
