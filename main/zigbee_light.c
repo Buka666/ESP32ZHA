@@ -20,6 +20,7 @@ static const char *TAG = "zha_rgb_light";
 #define RGB_LED_RMT_RES_HZ (10 * 1000 * 1000)
 #define PAIR_BUTTON_GPIO GPIO_NUM_9
 #define BUTTON_DEBOUNCE_US (30 * 1000)
+#define BUTTON_DOUBLE_CLICK_WINDOW_US (400 * 1000)
 
 typedef struct {
     bool on;
@@ -45,6 +46,8 @@ static led_strip_handle_t s_led_strip = NULL;
 static bool s_button_state = true;
 static bool s_button_raw_state = true;
 static int64_t s_button_last_change_us = 0;
+static int s_button_click_count = 0;
+static int64_t s_button_last_press_us = 0;
 
 static esp_err_t pair_button_init(void)
 {
@@ -200,8 +203,24 @@ static void pair_button_poll(void)
 
     s_button_state = raw_level;
     if (!s_button_state) {
-        ESP_LOGI(TAG, "Pair button pressed, starting network steering");
+        if ((now_us - s_button_last_press_us) <= BUTTON_DOUBLE_CLICK_WINDOW_US) {
+            s_button_click_count++;
+        } else {
+            s_button_click_count = 1;
+        }
+        s_button_last_press_us = now_us;
+
+        if (s_button_click_count >= 2) {
+            ESP_LOGI(TAG, "Pair button double-clicked, starting direct binding (finding & binding)");
+            esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_FINDING_BINDING);
+            s_button_click_count = 0;
+        }
+    }
+
+    if (s_button_click_count == 1 && (now_us - s_button_last_press_us) > BUTTON_DOUBLE_CLICK_WINDOW_US) {
+        ESP_LOGI(TAG, "Pair button single-clicked, starting simple binding (network steering)");
         esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
+        s_button_click_count = 0;
     }
 }
 
