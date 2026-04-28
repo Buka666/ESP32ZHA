@@ -69,6 +69,22 @@ idf.py -D CMAKE_BUILD_TYPE=Debug build
   - собирает релизную прошивку;
   - публикует GitHub Release c файлами прошивки (`.bin`, `.elf`, `.map`, `flasher_args.json`).
 
+
+## Как сформировать релиз
+
+1. Обновите `CHANGELOG.md` под новую версию (например, `1.0.1`).
+2. Закоммитьте изменения в `main`/`master`.
+3. Создайте и отправьте git-тег формата `v*`:
+
+```bash
+git tag -a v1.0.1 -m "Release v1.0.1"
+git push origin v1.0.1
+```
+
+4. После пуша тега workflow `.github/workflows/release.yml` автоматически соберёт прошивку и создаст GitHub Release с артефактами (`.bin`, `.elf`, `.map`, `flasher_args.json`).
+
+Альтернатива: запустить workflow **Release firmware** вручную через `workflow_dispatch`, передав `tag`.
+
 ## Подключение к ZHA
 
 1. В Home Assistant: **Settings → Devices & Services → Zigbee Home Automation → Add Device**.
