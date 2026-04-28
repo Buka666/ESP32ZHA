@@ -1,7 +1,9 @@
 #include <math.h>
 #include <string.h>
 
+#include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_zigbee_core.h"
 #include "ha/esp_zigbee_ha_standard.h"
 #include "led_strip.h"
@@ -16,6 +18,8 @@ static const char *TAG = "zha_rgb_light";
 #define RGB_LED_GPIO GPIO_NUM_8
 #define RGB_LED_NUM_PIXELS 1
 #define RGB_LED_RMT_RES_HZ (10 * 1000 * 1000)
+#define PAIR_BUTTON_GPIO GPIO_NUM_9
+#define BUTTON_DEBOUNCE_US (30 * 1000)
 
 typedef struct {
     bool on;
@@ -38,6 +42,27 @@ static rgb_light_state_t s_light = {
 };
 
 static led_strip_handle_t s_led_strip = NULL;
+static bool s_button_state = true;
+static bool s_button_raw_state = true;
+static int64_t s_button_last_change_us = 0;
+
+static esp_err_t pair_button_init(void)
+{
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << PAIR_BUTTON_GPIO),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    esp_err_t err = gpio_config(&io_conf);
+    if (err == ESP_OK) {
+        s_button_state = gpio_get_level(PAIR_BUTTON_GPIO);
+        s_button_raw_state = s_button_state;
+        s_button_last_change_us = esp_timer_get_time();
+    }
+    return err;
+}
 
 static esp_err_t rgb_led_init(void)
 {
@@ -152,6 +177,32 @@ static void light_apply_state(void)
 static void bdb_start_top_level_commissioning_cb(uint8_t mode_mask)
 {
     esp_zb_bdb_start_top_level_commissioning(mode_mask);
+}
+
+static void pair_button_poll(void)
+{
+    int64_t now_us = esp_timer_get_time();
+    bool raw_level = gpio_get_level(PAIR_BUTTON_GPIO);
+
+    if (raw_level != s_button_raw_state) {
+        s_button_raw_state = raw_level;
+        s_button_last_change_us = now_us;
+        return;
+    }
+
+    if ((now_us - s_button_last_change_us) < BUTTON_DEBOUNCE_US) {
+        return;
+    }
+
+    if (raw_level == s_button_state) {
+        return;
+    }
+
+    s_button_state = raw_level;
+    if (!s_button_state) {
+        ESP_LOGI(TAG, "Pair button pressed, starting network steering");
+        esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
+    }
 }
 
 static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t *message)
@@ -273,6 +324,7 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     ESP_ERROR_CHECK(rgb_led_init());
+    ESP_ERROR_CHECK(pair_button_init());
 
     esp_zb_platform_config_t config = {
         .radio_config = ESP_ZB_DEFAULT_RADIO_CONFIG(),
@@ -311,5 +363,6 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_zb_start(false));
     while (1) {
         esp_zb_main_loop_iteration();
+        pair_button_poll();
     }
 }
