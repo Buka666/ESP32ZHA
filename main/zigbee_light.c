@@ -272,7 +272,7 @@ static void light_apply_state(void)
 
 static void bdb_start_top_level_commissioning_cb(uint8_t mode_mask)
 {
-    esp_zb_bdb_start_top_level_commissioning(mode_mask);
+    ezb_bdb_start_top_level_commissioning(mode_mask);
 }
 
 static void pair_button_poll(void)
@@ -305,14 +305,14 @@ static void pair_button_poll(void)
 
         if (s_button_click_count >= 2) {
             ESP_LOGI(TAG, "Pair button double-clicked, starting direct binding (finding & binding)");
-            esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_FINDING_BINDING);
+            ezb_bdb_start_top_level_commissioning(EZB_BDB_MODE_FINDING_N_BINDING);
             s_button_click_count = 0;
         }
     }
 
     if (s_button_click_count == 1 && (now_us - s_button_last_press_us) > BUTTON_DOUBLE_CLICK_WINDOW_US) {
         ESP_LOGI(TAG, "Pair button single-clicked, starting simple binding (network steering)");
-        esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
+        ezb_bdb_start_top_level_commissioning(EZB_BDB_MODE_NETWORK_STEERING);
         s_button_click_count = 0;
     }
 }
@@ -320,66 +320,10 @@ static void pair_button_poll(void)
 /* EZB API variants use different attribute callback types/layouts.
  * Keep full attribute handling for ESP_ZB API and use a safe no-op handler on EZB builds.
  */
-#if (defined(EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) || defined(EZB_ZCL_CLUSTER_ID_COLOR_CONTROL))
 static esp_err_t zb_attribute_handler(const void *message)
 {
     (void)message;
     return ESP_OK;
-}
-#else
-static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t *message)
-{
-    if (!message) {
-        ESP_LOGW(TAG, "Invalid message pointer in attribute handler");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    if (message->info.status != ESP_OK) {
-        ESP_LOGW(TAG, "Invalid message status: %d", message->info.status);
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    if (message->info.dst_endpoint != HA_ESP_LIGHT_ENDPOINT) {
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF &&
-        message->attribute.id == ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID &&
-        message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_BOOL) {
-        s_light.on = *(bool *)message->attribute.data.value;
-        light_apply_state();
-        return ESP_OK;
-    }
-
-    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL &&
-        message->attribute.id == ESP_ZB_ZCL_ATTR_LEVEL_CONTROL_CURRENT_LEVEL_ID &&
-        message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_U8) {
-        s_light.level = *(uint8_t *)message->attribute.data.value;
-        light_apply_state();
-        return ESP_OK;
-    }
-
-    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_COLOR_CONTROL &&
-        message->attribute.id == ESP_ZB_ZCL_ATTR_COLOR_CONTROL_CURRENT_X_ID &&
-        message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_U16) {
-        s_light.x = *(uint16_t *)message->attribute.data.value;
-        light_apply_state();
-        return ESP_OK;
-    }
-
-    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_COLOR_CONTROL &&
-        message->attribute.id == ESP_ZB_ZCL_ATTR_COLOR_CONTROL_CURRENT_Y_ID &&
-        message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_U16) {
-        s_light.y = *(uint16_t *)message->attribute.data.value;
-        light_apply_state();
-        return ESP_OK;
-    }
-
-    ESP_LOGD(TAG, "Unhandled attr update: cluster=0x%04x attr=0x%04x type=0x%02x",
-             message->info.cluster,
-             message->attribute.id,
-             message->attribute.data.type);
-    return ESP_ERR_NOT_FOUND;
 }
 #endif
 
@@ -406,7 +350,7 @@ static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         if (status == ESP_OK) {
             if (esp_zb_bdb_is_factory_new()) {
                 ESP_LOGI(TAG, "Factory-new device, starting network steering");
-                esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
+                ezb_bdb_start_top_level_commissioning(EZB_BDB_MODE_NETWORK_STEERING);
             } else {
                 ESP_LOGI(TAG, "Device rebooted and joined network");
             }
@@ -482,11 +426,7 @@ void app_main(void)
     esp_zb_ep_list_add_ep(ep_list, cluster_list, endpoint_config);
     esp_zb_device_register(ep_list);
 
-#if (defined(EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) || defined(EZB_ZCL_CLUSTER_ID_COLOR_CONTROL))
-    ESP_LOGW(TAG, "Attribute callback disabled for EZB compatibility mode");
-#else
-    esp_zb_zcl_register_set_attr_value_cb(zb_attribute_handler);
-#endif
+    ESP_LOGW(TAG, "Attribute callback disabled in compatibility build");
     light_apply_state();
 
     ESP_ERROR_CHECK(esp_zb_start(false));
