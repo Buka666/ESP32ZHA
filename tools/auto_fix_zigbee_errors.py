@@ -53,7 +53,7 @@ if "request for member 'attribute' in something not a structure or union" in log
                           '    esp_zb_zcl_register_set_attr_value_cb(zb_attribute_handler);\n'
                           '#endif\n')
 
- # Auto-fix 4: add BDB fallback constants to avoid undeclared-mode build breaks
+# Auto-fix 4: add BDB fallback constants to avoid undeclared-mode build breaks
 if "ESP_ZB_BDB_MODE_FINDING_BINDING" in log or "ESP_ZB_BDB_MODE_NETWORK_STEERING" in log:
     fallback_block = '''#ifndef ESP_ZB_BDB_MODE_INITIALIZATION
 #define ESP_ZB_BDB_MODE_INITIALIZATION 0

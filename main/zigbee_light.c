@@ -39,7 +39,7 @@
 #define ESP_ZB_BDB_MODE_FINDING_BINDING ESP_ZB_BDB_MODE_NETWORK_STEERING
 #endif
 
-#if defined(EZB_ZCL_CLUSTER_ID_ON_OFF)
+#if (defined(EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) || defined(EZB_ZCL_CLUSTER_ID_COLOR_CONTROL))
 #define esp_zb_bdb_start_top_level_commissioning ezb_bdb_start_top_level_commissioning
 #define esp_zb_bdb_is_factory_new ezb_bdb_is_factory_new
 #endif
@@ -47,7 +47,7 @@
 #include "nvs_flash.h"
 
 
-#if defined(EZB_ZCL_CLUSTER_ID_ON_OFF)
+#if (defined(EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) || defined(EZB_ZCL_CLUSTER_ID_COLOR_CONTROL))
 #define esp_zb_zcl_set_attr_value_message_t ezb_zcl_set_attr_value_message_t
 #define esp_zb_app_signal_t ezb_app_signal_t
 #define esp_zb_callback_t ezb_callback_t
@@ -320,7 +320,7 @@ static void pair_button_poll(void)
 /* EZB API variants use different attribute callback types/layouts.
  * Keep full attribute handling for ESP_ZB API and use a safe no-op handler on EZB builds.
  */
-#if defined(EZB_ZCL_CLUSTER_ID_ON_OFF)
+#if (defined(EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) || defined(EZB_ZCL_CLUSTER_ID_COLOR_CONTROL))
 static esp_err_t zb_attribute_handler(const void *message)
 {
     (void)message;
@@ -482,7 +482,7 @@ void app_main(void)
     esp_zb_ep_list_add_ep(ep_list, cluster_list, endpoint_config);
     esp_zb_device_register(ep_list);
 
-#if defined(EZB_ZCL_CLUSTER_ID_ON_OFF)
+#if (defined(EZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) || defined(EZB_ZCL_CLUSTER_ID_COLOR_CONTROL))
     ESP_LOGW(TAG, "Attribute callback disabled for EZB compatibility mode");
 #else
     esp_zb_zcl_register_set_attr_value_cb(zb_attribute_handler);
