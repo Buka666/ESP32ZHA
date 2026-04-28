@@ -2,6 +2,7 @@
 
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "driver/gpio.h"
 
 #include "esp_zigbee_core.h"
 #include "ha/esp_zigbee_ha_standard.h"
@@ -11,35 +12,86 @@ static const char *TAG = "zha_light";
 #define HA_ESP_LIGHT_ENDPOINT 10
 #define INSTALL_CODE_POLICY_ENABLE false
 
+/* GPIO конфигурация для управления реле/светодиодом */
+#define LIGHT_GPIO_PIN GPIO_NUM_8
+
 static bool s_light_on = false;
+
+/**
+ * @brief Инициализация GPIO для управления светом
+ */
+static void light_gpio_init(void)
+{
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << LIGHT_GPIO_PIN),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+    gpio_set_level(LIGHT_GPIO_PIN, 0);
+}
+
+/**
+ * @brief Установка состояния светильника
+ */
+static void light_set_state(bool on)
+{
+    s_light_on = on;
+    gpio_set_level(LIGHT_GPIO_PIN, on ? 1 : 0);
+    ESP_LOGI(TAG, "Light GPIO state set to: %s", on ? "ON" : "OFF");
+}
 
 static void bdb_start_top_level_commissioning_cb(uint8_t mode_mask)
 {
     esp_zb_bdb_start_top_level_commissioning(mode_mask);
 }
 
+/**
+ * @brief Обработчик для изменения атрибутов ZigBee
+ * 
+ * Обрабатывает команды включения/выключения света от ZigBee координатора
+ */
 static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t *message)
 {
-    if (!message || !message->info.status) {
+    /* Проверка на NULL указатель */
+    if (!message) {
+        ESP_LOGW(TAG, "Invalid message pointer in attribute handler");
         return ESP_ERR_INVALID_ARG;
     }
 
+    /* Проверка статуса сообщения */
+    if (message->info.status != ESP_OK) {
+        ESP_LOGW(TAG, "Invalid message status: %d", message->info.status);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Проверка, что это команда для нашего эндпоинта и кластера ON/OFF */
     if (message->info.dst_endpoint == HA_ESP_LIGHT_ENDPOINT &&
         message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF &&
         message->attribute.id == ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID &&
         message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_BOOL) {
 
-        s_light_on = *(bool *)message->attribute.data.value;
-        ESP_LOGI(TAG, "Light state updated from ZHA: %s", s_light_on ? "ON" : "OFF");
-        // Здесь можно управлять GPIO реального реле/светодиода.
+        bool new_state = *(bool *)message->attribute.data.value;
+        light_set_state(new_state);
+        ESP_LOGI(TAG, "Light state updated from ZHA: %s", new_state ? "ON" : "OFF");
         return ESP_OK;
     }
 
-    return ESP_OK;
+    /* Логирование неизвестных атрибутов */
+    ESP_LOGD(TAG, "Unknown attribute: endpoint=%d, cluster=0x%04x, attr=0x%04x",
+             message->info.dst_endpoint, message->info.cluster, message->attribute.id);
+    return ESP_ERR_NOT_FOUND;
 }
 
 static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 {
+    if (!signal_struct) {
+        ESP_LOGE(TAG, "Invalid signal struct pointer");
+        return;
+    }
+
     uint32_t *p_sg_p = signal_struct->p_app_signal;
     uint32_t sig_type = *p_sg_p;
     esp_err_t status = signal_struct->esp_err_status;
@@ -91,7 +143,15 @@ static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 
 void app_main(void)
 {
-    ESP_ERROR_CHECK(nvs_flash_init());
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    /* Инициализация GPIO для управления светом */
+    light_gpio_init();
 
     esp_zb_platform_config_t config = {
         .radio_config = ESP_ZB_DEFAULT_RADIO_CONFIG(),
