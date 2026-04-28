@@ -305,6 +305,16 @@ static void pair_button_poll(void)
     }
 }
 
+/* EZB API variants use different attribute callback types/layouts.
+ * Keep full attribute handling for ESP_ZB API and use a safe no-op handler on EZB builds.
+ */
+#if defined(EZB_BDB_MODE_INITIALIZATION)
+static esp_err_t zb_attribute_handler(const void *message)
+{
+    (void)message;
+    return ESP_OK;
+}
+#else
 static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t *message)
 {
     if (!message) {
@@ -359,6 +369,7 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
              message->attribute.data.type);
     return ESP_ERR_NOT_FOUND;
 }
+#endif
 
 static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 {
@@ -459,7 +470,11 @@ void app_main(void)
     esp_zb_ep_list_add_ep(ep_list, cluster_list, endpoint_config);
     esp_zb_device_register(ep_list);
 
+#if defined(EZB_BDB_MODE_INITIALIZATION)
+    ESP_LOGW(TAG, "Attribute callback disabled for EZB compatibility mode");
+#else
     esp_zb_zcl_register_set_attr_value_cb(zb_attribute_handler);
+#endif
     light_apply_state();
 
     ESP_ERROR_CHECK(esp_zb_start(false));
