@@ -27,6 +27,18 @@
 #define ESP_ZB_BDB_MODE_FINDING_BINDING EZB_BDB_MODE_FINDING_N_BINDING
 #endif
 
+#ifndef ESP_ZB_BDB_MODE_INITIALIZATION
+#define ESP_ZB_BDB_MODE_INITIALIZATION 0
+#endif
+
+#ifndef ESP_ZB_BDB_MODE_NETWORK_STEERING
+#define ESP_ZB_BDB_MODE_NETWORK_STEERING 0
+#endif
+
+#ifndef ESP_ZB_BDB_MODE_FINDING_BINDING
+#define ESP_ZB_BDB_MODE_FINDING_BINDING ESP_ZB_BDB_MODE_NETWORK_STEERING
+#endif
+
 #if defined(EZB_ZCL_CLUSTER_ID_ON_OFF)
 #define esp_zb_bdb_start_top_level_commissioning ezb_bdb_start_top_level_commissioning
 #define esp_zb_bdb_is_factory_new ezb_bdb_is_factory_new
