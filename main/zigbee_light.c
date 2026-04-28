@@ -270,7 +270,7 @@ static void light_apply_state(void)
              s_light.b);
 }
 
-static void bdb_start_top_level_commissioning_cb(uint8_t mode_mask)
+static __attribute__((unused)) void bdb_start_top_level_commissioning_cb(uint8_t mode_mask)
 {
     ezb_bdb_start_top_level_commissioning(mode_mask);
 }
@@ -320,7 +320,7 @@ static void pair_button_poll(void)
 /* EZB API variants use different attribute callback types/layouts.
  * Keep full attribute handling for ESP_ZB API and use a safe no-op handler on EZB builds.
  */
-static esp_err_t zb_attribute_handler(const void *message)
+static __attribute__((unused)) esp_err_t zb_attribute_handler(const void *message)
 {
     (void)message;
     return ESP_OK;
@@ -416,6 +416,13 @@ void app_main(void)
                                   ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID,
                                   (void *)"ESP32C6_SUPERMINI_RGB");
 
+#if defined(EZB_AF_HA_PROFILE_ID)
+    (void)light_cfg;
+    (void)ep_list;
+    (void)cluster_list;
+    ESP_LOGW(TAG, "EZB SDK detected: legacy endpoint registration path is not implemented in this sample");
+    return;
+#else
     esp_zb_endpoint_config_t endpoint_config = {
         .endpoint = HA_ESP_LIGHT_ENDPOINT,
         .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
@@ -434,4 +441,5 @@ void app_main(void)
         esp_zb_main_loop_iteration();
         pair_button_poll();
     }
+#endif
 }
