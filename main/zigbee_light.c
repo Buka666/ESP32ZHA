@@ -378,7 +378,7 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
     return ESP_ERR_NOT_FOUND;
 }
 
-static void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
+void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 {
     if (!signal_struct || !signal_struct->p_app_signal) {
         ESP_LOGE(TAG, "Invalid Zigbee signal pointer");
